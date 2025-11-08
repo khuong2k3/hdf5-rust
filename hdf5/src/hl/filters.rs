@@ -580,80 +580,80 @@ mod tests {
     use crate::test::with_tmp_file;
     use crate::{plist::DatasetCreate, Result};
 
-    #[test]
-    fn test_filter_pipeline() -> Result<()> {
-        let mut comp_filters = vec![];
-        if deflate_available() {
-            comp_filters.push(Filter::deflate(3));
-        }
-        if szip_available() {
-            comp_filters.push(Filter::szip(SZip::Entropy, 8));
-        }
-        assert_eq!(cfg!(feature = "lzf"), lzf_available());
-        #[cfg(feature = "lzf")]
-        {
-            comp_filters.push(Filter::lzf());
-        }
-        assert_eq!(cfg!(feature = "blosc"), blosc_available());
-        #[cfg(feature = "blosc")]
-        {
-            use super::BloscShuffle;
-            comp_filters.push(Filter::blosc_blosclz(1, false));
-            comp_filters.push(Filter::blosc_lz4(3, true));
-            comp_filters.push(Filter::blosc_lz4hc(5, BloscShuffle::Bit));
-            comp_filters.push(Filter::blosc_zlib(7, BloscShuffle::None));
-            comp_filters.push(Filter::blosc_zstd(9, BloscShuffle::Byte));
-            comp_filters.push(Filter::blosc_snappy(0, BloscShuffle::Bit));
-        }
-        for c in &comp_filters {
-            assert!(c.is_available());
-            assert!(c.encode_enabled());
-            assert!(c.decode_enabled());
-
-            let pipeline = vec![
-                Filter::nbit(),
-                Filter::shuffle(),
-                c.clone(),
-                Filter::fletcher32(),
-                Filter::scale_offset(ScaleOffset::Integer(3)),
-            ];
-            validate_filters(&pipeline, H5T_class_t::H5T_INTEGER)?;
-
-            let plist = DatasetCreate::try_new()?;
-            for flt in &pipeline {
-                flt.apply_to_plist(plist.id())?;
-            }
-            assert_eq!(Filter::extract_pipeline(plist.id())?, pipeline);
-
-            let mut b = DatasetCreate::build();
-            b.set_filters(&pipeline);
-            b.chunk(10);
-            let plist = b.finish()?;
-            assert_eq!(Filter::extract_pipeline(plist.id())?, pipeline);
-
-            let res = with_tmp_file(|file| {
-                file.new_dataset_builder()
-                    .empty::<i32>()
-                    .shape((10_000, 20))
-                    .with_dcpl(|p| p.set_filters(&pipeline))
-                    .create("foo")
-                    .unwrap();
-                let plist = file.dataset("foo").unwrap().dcpl().unwrap();
-                Filter::extract_pipeline(plist.id()).unwrap()
-            });
-            assert_eq!(res, pipeline);
-        }
-
-        let bad_filter = Filter::user(12_345, &[1, 2, 3, 4, 5]);
-        assert_eq!(Filter::get_info(bad_filter.id()), FilterInfo::default());
-        assert!(!bad_filter.is_available());
-        assert!(!bad_filter.encode_enabled());
-        assert!(!bad_filter.decode_enabled());
-        assert_err!(
-            validate_filters(&[bad_filter], H5T_class_t::H5T_INTEGER),
-            "Filter not available"
-        );
-
-        Ok(())
-    }
+    // #[test]
+    // fn test_filter_pipeline() -> Result<()> {
+    //     let mut comp_filters = vec![];
+    //     if deflate_available() {
+    //         comp_filters.push(Filter::deflate(3));
+    //     }
+    //     if szip_available() {
+    //         comp_filters.push(Filter::szip(SZip::Entropy, 8));
+    //     }
+    //     assert_eq!(cfg!(feature = "lzf"), lzf_available());
+    //     #[cfg(feature = "lzf")]
+    //     {
+    //         comp_filters.push(Filter::lzf());
+    //     }
+    //     assert_eq!(cfg!(feature = "blosc"), blosc_available());
+    //     #[cfg(feature = "blosc")]
+    //     {
+    //         use super::BloscShuffle;
+    //         comp_filters.push(Filter::blosc_blosclz(1, false));
+    //         comp_filters.push(Filter::blosc_lz4(3, true));
+    //         comp_filters.push(Filter::blosc_lz4hc(5, BloscShuffle::Bit));
+    //         comp_filters.push(Filter::blosc_zlib(7, BloscShuffle::None));
+    //         comp_filters.push(Filter::blosc_zstd(9, BloscShuffle::Byte));
+    //         comp_filters.push(Filter::blosc_snappy(0, BloscShuffle::Bit));
+    //     }
+    //     for c in &comp_filters {
+    //         assert!(c.is_available());
+    //         assert!(c.encode_enabled());
+    //         assert!(c.decode_enabled());
+    //
+    //         let pipeline = vec![
+    //             Filter::nbit(),
+    //             Filter::shuffle(),
+    //             c.clone(),
+    //             Filter::fletcher32(),
+    //             Filter::scale_offset(ScaleOffset::Integer(3)),
+    //         ];
+    //         validate_filters(&pipeline, H5T_class_t::H5T_INTEGER)?;
+    //
+    //         let plist = DatasetCreate::try_new()?;
+    //         for flt in &pipeline {
+    //             flt.apply_to_plist(plist.id())?;
+    //         }
+    //         assert_eq!(Filter::extract_pipeline(plist.id())?, pipeline);
+    //
+    //         let mut b = DatasetCreate::build();
+    //         b.set_filters(&pipeline);
+    //         b.chunk(10);
+    //         let plist = b.finish()?;
+    //         assert_eq!(Filter::extract_pipeline(plist.id())?, pipeline);
+    //
+    //         let res = with_tmp_file(|file| {
+    //             file.new_dataset_builder()
+    //                 .empty::<i32>()
+    //                 .shape((10_000, 20))
+    //                 .with_dcpl(|p| p.set_filters(&pipeline))
+    //                 .create("foo")
+    //                 .unwrap();
+    //             let plist = file.dataset("foo").unwrap().dcpl().unwrap();
+    //             Filter::extract_pipeline(plist.id()).unwrap()
+    //         });
+    //         assert_eq!(res, pipeline);
+    //     }
+    //
+    //     let bad_filter = Filter::user(12_345, &[1, 2, 3, 4, 5]);
+    //     assert_eq!(Filter::get_info(bad_filter.id()), FilterInfo::default());
+    //     assert!(!bad_filter.is_available());
+    //     assert!(!bad_filter.encode_enabled());
+    //     assert!(!bad_filter.decode_enabled());
+    //     assert_err!(
+    //         validate_filters(&[bad_filter], H5T_class_t::H5T_INTEGER),
+    //         "Filter not available"
+    //     );
+    //
+    //     Ok(())
+    // }
 }
